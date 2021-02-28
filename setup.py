@@ -10,7 +10,7 @@ def resolve(filename):
 
 
 with open(resolve("yaarg/__init__.py")) as f:
-    version_pattern = re.compile(r'__version__ = [\'"](.+?)[\'"]')
+    version_pattern = re.compile(r'__version__\s*=\s*[\'"](.+?)[\'"]')
     version_match = re.search(version_pattern, f.read())
     assert version_match is not None
     version = version_match.group(1)

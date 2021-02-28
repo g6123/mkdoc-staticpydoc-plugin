@@ -20,12 +20,12 @@ class YaargPlugin(BasePlugin):
     default_resolver_configs = (
         {
             "glob": "*.py",
-            "generator": "yaarg.generators.parso.ParsoGenerator",
+            "generator": "yaarg.generators.parso:ParsoGenerator",
             "options": {},
         },
         {
             "glob": "*.[jt]s?",
-            "generator": "yaarg.generators.jsdoc.JSDocGenerator",
+            "generator": "yaarg.generators.jsdoc:JSDocGenerator",
             "options": {},
         },
     )

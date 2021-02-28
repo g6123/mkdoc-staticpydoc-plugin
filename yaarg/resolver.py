@@ -63,7 +63,7 @@ class Resolver:
 
 
 def import_string(path):
-    module_name, obj_name = path.rsplit(".", 1)
+    module_name, obj_name = path.rsplit(":", 1)
     module = import_module(module_name)
     try:
         return getattr(module, obj_name)

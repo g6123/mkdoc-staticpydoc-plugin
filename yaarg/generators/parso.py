@@ -6,7 +6,7 @@ from schema import Optional as OptionalItem, Schema
 
 from .base import BaseGenerator
 
-__all__ = ["Generator"]
+__all__ = ["ParsoGenerator"]
 
 
 class ParsoGenerator(BaseGenerator):
