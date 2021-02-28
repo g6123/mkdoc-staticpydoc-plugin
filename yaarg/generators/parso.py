@@ -1,5 +1,6 @@
 from typing import Optional
 
+from docstring_parser import parse as parse_docstring
 from parso.grammar import load_grammar
 from parso.python.tree import Module, Name, PythonNode, Scope, String
 from schema import Optional as OptionalItem, Schema
@@ -29,8 +30,14 @@ class ParsoGenerator(BaseGenerator):
         else:
             root_node = module
 
-        node: Optional[String] = root_node.get_doc_node()
-        return node.value if node else ""
+        doc_node: Optional[String] = root_node.get_doc_node()
+        if doc_node is None:
+            return ""
+
+        doc_string = doc_node._get_payload()
+        doc = parse_docstring(doc_string)
+        # print(docstring)
+        return doc_string
 
 
 def find_symbol(module: Module, path: str) -> Optional[Scope]:

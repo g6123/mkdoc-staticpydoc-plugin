@@ -21,13 +21,14 @@ with open(resolve("requirements/base.txt")) as f:
 
 
 with open(resolve("requirements/extra.txt")) as f:
-    extras_pattern = re.compile(r"^(.+?)\s*#\s*extra\s*=\s*(.+?)$")
+    extra_pattern = re.compile(r"^(.+?)\s*#\s*extra\s*=\s*(.+?)$")
     extra_requires = defaultdict(list)
 
     for line in f:
-        match = re.match(extras_pattern, line)
+        match = re.match(extra_pattern, line)
         if match is not None:
-            extra_requires[match.group(2)].append(match.group(1))
+            for extra in match.group(2).split(","):
+                extra_requires[extra].append(match.group(1))
 
 setup(
     name="mkdocs-yaarg-plugin",

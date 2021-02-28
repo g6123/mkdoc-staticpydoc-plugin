@@ -1,1 +1,2 @@
 parso==0.8.1  # extra=parso
+docstring-parser==0.7.3  # extra=parso
