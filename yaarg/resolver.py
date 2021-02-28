@@ -2,7 +2,7 @@ import sys
 from fnmatch import fnmatch
 from importlib import import_module
 from pathlib import Path
-from typing import Sequence, Tuple, Type
+from typing import Dict, Sequence, Tuple, Type
 
 from yaarg.generators.base import BaseGenerator
 
@@ -10,6 +10,8 @@ if sys.version_info >= (3, 8):
     from typing import TypedDict
 else:
     from typing_extensions import TypedDict
+
+__all__ = ["Resolver", "ResolverConfig", "ResolverError"]
 
 
 class ResolverConfig(TypedDict):
@@ -23,15 +25,23 @@ class ResolverError(Exception):
 
 
 class Resolver:
+    """
+    Initializes an appropriate generator instance for the given filepath.
+    """
+
+    _configs: Sequence[ResolverConfig]
+    _generator_caches: Dict[str, BaseGenerator]
+
     def __init__(self, configs: Sequence[ResolverConfig]):
-        self.configs = configs
+        self._configs = configs
+        self._generator_caches = {}
 
     def resolve(self, filepath: Path, options: dict) -> Tuple[BaseGenerator, dict]:
         options = options.copy()
         generator_path = options.pop("generator", None)
 
         if generator_path is None:
-            for config in self.configs:
+            for config in self._configs:
                 if self.match(filepath, config, options):
                     generator_path = config["generator"]
                     options.update(config["options"])
@@ -39,10 +49,13 @@ class Resolver:
             else:
                 raise ResolverError(filepath)
 
-        generator_cls: Type[BaseGenerator] = import_string(generator_path)
-        generator = generator_cls()
-        options = generator.validate_options(options)
+        if generator_path in self._generator_caches:
+            generator = self._generator_caches[generator_path]
+        else:
+            generator_cls: Type[BaseGenerator] = import_string(generator_path)
+            generator = self._generator_caches[generator_path] = generator_cls()
 
+        options = generator.validate_options(options)
         return generator, options
 
     def match(self, filepath: Path, config: ResolverConfig, options: dict) -> bool:

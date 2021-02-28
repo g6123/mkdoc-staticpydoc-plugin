@@ -25,7 +25,7 @@ class ParsoGenerator(BaseGenerator):
             module: Module = parser.get_root_node()
 
         if symbol is not None:
-            root_node = get_symbol(module, symbol)
+            root_node = find_symbol(module, symbol)
         else:
             root_node = module
 
@@ -33,7 +33,7 @@ class ParsoGenerator(BaseGenerator):
         return node.value if node else ""
 
 
-def get_symbol(module: Module, path: str) -> Optional[Scope]:
+def find_symbol(module: Module, path: str) -> Optional[Scope]:
     current_node: Scope = module
 
     for part in path.split("."):
