@@ -1,9 +1,9 @@
-from yaarg.generators.python import PythonGenerator
+from yaarg.generators.parso import ParsoGenerator
 
 
 def test_generate():
     # Given
-    generator = PythonGenerator()
+    generator = ParsoGenerator()
     options = generator.validate_options({})
 
     # When

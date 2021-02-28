@@ -1,18 +1,20 @@
 from typing import Optional
 
-import schema
 from parso.grammar import load_grammar
-from parso.python.tree import Module, Name, PythonNode, Scope
+from parso.python.tree import Module, Name, PythonNode, Scope, String
+from schema import Optional as OptionalItem, Schema
 
 from .base import BaseGenerator
 
+__all__ = ["Generator"]
 
-class PythonGenerator(BaseGenerator):
-    name = "python"
-    options_schema = schema.Schema(
+
+class ParsoGenerator(BaseGenerator):
+    name = "parso"
+    options_schema = Schema(
         {
-            schema.Optional("version", default=None): str,
-            schema.Optional("encoding", default="utf-8"): str,
+            OptionalItem("version", default=None): str,
+            OptionalItem("encoding", default="utf-8"): str,
         }
     )
 
@@ -23,12 +25,12 @@ class PythonGenerator(BaseGenerator):
             module: Module = parser.get_root_node()
 
         if symbol is not None:
-            node = get_symbol(module, symbol)
+            root_node = get_symbol(module, symbol)
         else:
-            node = module
+            root_node = module
 
-        print(node.get_doc_node())
-        return ""
+        node: Optional[String] = root_node.get_doc_node()
+        return node.value if node else ""
 
 
 def get_symbol(module: Module, path: str) -> Optional[Scope]:
