@@ -53,4 +53,4 @@ class YaargBlockProcessor(BlockProcessor):
 
         generator, options = self.resolver.resolve(Path(filename), options)
         rendered_block = generator.generate(Path(filename), symbol, options)
-        blocks.insert(0, rendered_block)
+        blocks[0:0] = list(rendered_block)

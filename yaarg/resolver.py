@@ -1,15 +1,10 @@
-import sys
 from fnmatch import fnmatch
 from importlib import import_module
 from pathlib import Path
 from typing import Dict, Sequence, Tuple, Type
 
 from yaarg.generators.base import BaseGenerator
-
-if sys.version_info >= (3, 8):
-    from typing import TypedDict
-else:
-    from typing_extensions import TypedDict
+from yaarg.typings import TypedDict
 
 __all__ = ["Resolver", "ResolverConfig", "ResolverError"]
 
