@@ -4,7 +4,7 @@ Provides base generator implementation and utilities to build generators.
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Optional, cast
 
 from schema import Schema
 
@@ -47,18 +47,32 @@ class BaseGenerator(ABC):
         pass
 
 
-def markdown_paragraph(text: Optional[str], append_newline=True) -> str:
+def markdown_heading(
+    text: Optional[str], level: int = 1, append_newline: bool = True
+) -> str:
+    """
+    Creates markdown heading block.
+    """
+    if text is None:
+        return ""
+
+    text = ("#" * level) + " " + text
+    text = text.strip()
+    if append_newline:
+        text += "\n"
+    return text
+
+
+def markdown_paragraph(text: Optional[str], append_newline: bool = True) -> str:
     """
     Creates markdown paragraph block(s).
     """
     if text is None:
-        text = ""
+        return ""
 
     text = text.strip()
-
     if append_newline:
         text += "\n"
-
     return text
 
 

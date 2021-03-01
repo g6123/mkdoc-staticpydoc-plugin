@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, replace
-from typing import Any, Dict, Generator, Optional, OrderedDict, cast
+from typing import Any, Dict, Generator, Optional, OrderedDict, Type, cast
 
 from docstring_parser import parse as parse_docstring
 from parso.grammar import load_grammar
@@ -16,7 +16,7 @@ from parso.python.tree import (
 )
 from schema import Optional as OptionalItem, Schema
 
-from .base import BaseGenerator, markdown_block, markdown_paragraph
+from .base import BaseGenerator, markdown_block, markdown_heading, markdown_paragraph
 
 __all__ = ["ParsoGenerator"]
 
@@ -49,7 +49,14 @@ class ParsoGenerator(BaseGenerator):
             OptionalItem("encoding", default="utf-8"): str,
             OptionalItem("depth", default=2): int,
             OptionalItem("deep", default=True): bool,
-            OptionalItem("hide_undocumented", default=True): bool,
+            OptionalItem(
+                "methods", default={"undocumented": True, "private": False}
+            ): Schema(
+                {
+                    OptionalItem("undocumented", default=True): bool,
+                    OptionalItem("private", default=False): bool,
+                }
+            ),
         }
     )
 
@@ -75,23 +82,19 @@ class ParsoGenerator(BaseGenerator):
         return self._generate_doc(root_node, context)
 
     def _generate_doc(self, node: Scope, context: ParsoGeneratorContext):
-        if node.type == Module.type:
+        if isnode(node, Module):
             yield from self._generate_module_doc(cast(Module, node), context)
-        elif node.type == Class.type:
+        elif isnode(node, Class):
             yield from self._generate_class_doc(cast(Class, node), context)
-        elif node.type == Function.type:
+        elif isnode(node, Function):
             yield from self._generate_func_doc(cast(Function, node), context)
 
     def _generate_module_doc(self, module_node: Module, context: ParsoGeneratorContext):
-        yield "{heading} `{title}`\n".format(
-            heading="#" * context.depth,
-            title=context.filepath,
-        )
+        yield markdown_heading(f"`{context.filepath}`", level=context.depth)
 
         doc_node = cast(Optional[String], module_node.get_doc_node())
-        if doc_node is not None:
-            doc_content = doc_node._get_payload()
-            doc = parse_docstring(doc_content)
+        if doc_node:
+            doc = parse_docstring(doc_node._get_payload())
             yield markdown_paragraph(doc.short_description)
             yield markdown_paragraph(doc.long_description)
 
@@ -102,17 +105,11 @@ class ParsoGenerator(BaseGenerator):
                 )
 
     def _generate_class_doc(self, class_node: Class, context: ParsoGeneratorContext):
+        yield markdown_heading(f"`{class_node.name.value}`", level=context.depth)
+
         doc_node = cast(Optional[String], class_node.get_doc_node())
-
-        if doc_node is not None or not context.options["hide_undocumented"]:
-            yield "{heading} `{title}`\n".format(
-                heading="#" * context.depth,
-                title=class_node.name.value,
-            )
-
-        if doc_node is not None:
-            doc_content = doc_node._get_payload()
-            doc = parse_docstring(doc_content)
+        if doc_node:
+            doc = parse_docstring(doc_node._get_payload())
             yield markdown_paragraph(doc.short_description)
             yield markdown_paragraph(doc.long_description)
 
@@ -123,12 +120,20 @@ class ParsoGenerator(BaseGenerator):
                 )
 
     def _generate_func_doc(self, func_node: Function, context: ParsoGeneratorContext):
-        if getattr(context.parent, "type") == Class.type:
+        if not context.options["methods"]["undocumented"]:
+            if func_node.get_doc_node() is None:
+                return
+
+        if not context.options["methods"]["private"]:
+            if re.match(r"^_[^_]+?$", func_node.name.value):
+                return
+
+        if isnode(context.parent, Class):
             is_static = any(
-                re.search("(staticmethod|classmethod)", deco.get_code())
-                for deco in func_node.get_decorators()
+                re.search("(staticmethod|classmethod)", decorator_node.get_code())
+                for decorator_node in func_node.get_decorators()
             )
-            prefix = "." if is_static else "#"
+            prefix = context.parent_name + ("." if is_static else "#")
         else:
             prefix = ""
 
@@ -139,33 +144,31 @@ class ParsoGenerator(BaseGenerator):
                 if not (idx == 0 and param_node.name.value in ("self", "cls"))
             ]
         )
+
         doc_node = cast(Optional[String], func_node.get_doc_node())
-
-        if doc_node is None:
-            if context.options["hide_undocumented"]:
-                return
-
-            doc = None
-            param_docs = {}
-        else:
+        if doc_node:
             doc = parse_docstring(doc_node._get_payload())
             param_docs = {param_doc.arg_name: param_doc for param_doc in doc.params}
+        else:
+            doc = None
+            param_docs = {}
 
-        yield "{heading} `{parent}{prefix}{title}({params})`\n".format(
-            heading="#" * context.depth,
-            parent=context.parent_name or "",
-            prefix=prefix,
-            title=func_node.name.value,
-            params="".join(
-                param_node.get_code() for param_node in param_nodes.values()
-            ).strip(),
+        yield markdown_heading(
+            "`{prefix}{title}({params})`\n".format(
+                prefix=prefix,
+                title=func_node.name.value,
+                params="".join(
+                    param_node.get_code() for param_node in param_nodes.values()
+                ).strip(),
+            ),
+            level=context.depth,
         )
 
         if doc:
             yield markdown_paragraph(doc.short_description)
 
         if param_nodes:
-            yield "{heading} Arguments".format(heading="#" * (context.depth + 1))
+            yield markdown_heading("Arguments", level=context.depth + 1)
             with markdown_block() as block:
                 block.writeln("| Name | Type | Description | Default |")
                 block.writeln("| ---- | ---- | ----------- | ------- |")
@@ -189,25 +192,29 @@ class ParsoGenerator(BaseGenerator):
                     )
                 yield block.build()
 
-        yield "{heading} Returns".format(heading="#" * (context.depth + 1))
+        yield markdown_heading("Returns", level=context.depth + 1)
         with markdown_block() as block:
+            if doc:
+                returns_doc = doc.returns
+            else:
+                returns_doc = None
+
             block.writeln("| Type | Description |")
             block.writeln("| ---- | ----------- |")
-            if doc.returns and doc.returns.type_name:
-                block.write(f"| {doc.returns.type_name} ")
-            elif func_node.annotation:
-                block.write(f"| {get_code(func_node.annotation)} ")
-            else:
-                block.write("| - ")
-            if doc.returns and doc.returns.description:
-                block.write(f"| {doc.returns.description} ")
-            else:
-                block.write("| - ")
-            block.write("|")
+            block.writeln(
+                "| {type} | {description} |".format(
+                    type=(
+                        getattr(returns_doc, "type_name", None)
+                        or get_code(func_node.annotation)
+                        or "-"
+                    ),
+                    description=getattr(returns_doc, "description", None) or "-",
+                )
+            )
             yield block.build()
 
         if doc and doc.long_description:
-            yield "{heading} Details".format(heading="#" * (context.depth + 1))
+            yield markdown_heading("Details", level=context.depth + 1)
             yield markdown_paragraph(doc.long_description)
 
 
@@ -243,3 +250,10 @@ def get_code(node: Optional[Scope]):
         return None
 
     return node.get_code()
+
+
+def isnode(node: Optional[Scope], node_cls: Type[Scope]):
+    if node is None:
+        return False
+
+    return node.type == node_cls.type
