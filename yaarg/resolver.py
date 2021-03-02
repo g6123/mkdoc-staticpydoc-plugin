@@ -1,15 +1,17 @@
-from fnmatch import fnmatch
+from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
 from typing import Dict, Sequence, Tuple, Type
 
+from mkdocs.config import Config as MKDocsConfig
+
 from yaarg.generators.base import BaseGenerator
-from yaarg.typings import TypedDict
 
 __all__ = ["Resolver", "ResolverConfig", "ResolverError"]
 
 
-class ResolverConfig(TypedDict):
+@dataclass
+class ResolverRule:
     glob: str
     generator: str
     options: dict
@@ -24,37 +26,37 @@ class Resolver:
     Initializes an appropriate generator instance for the given filepath.
     """
 
-    _configs: Sequence[ResolverConfig]
-    _generator_caches: Dict[str, BaseGenerator]
+    rules: Sequence[ResolverRule]
+    generator_caches: Dict[str, BaseGenerator]
 
-    def __init__(self, configs: Sequence[ResolverConfig]):
-        self._configs = configs
-        self._generator_caches = {}
+    def __init__(self, rules: Sequence[ResolverRule], mkdocs: MKDocsConfig):
+        self.rules = rules
+        self.generator_caches = {}
+        self.mkdocs = mkdocs
 
     def resolve(self, filepath: Path, options: dict) -> Tuple[BaseGenerator, dict]:
         options = options.copy()
         generator_path = options.pop("generator", None)
 
         if generator_path is None:
-            for config in self._configs:
-                if self.match(filepath, config, options):
-                    generator_path = config["generator"]
-                    options.update(config["options"])
+            for rule in self.rules:
+                if self.match(filepath, rule, options):
+                    generator_path = rule.generator
+                    options.update(rule.options)
                     break
             else:
                 raise ResolverError(filepath)
 
-        if generator_path in self._generator_caches:
-            generator = self._generator_caches[generator_path]
-        else:
+        if generator_path not in self.generator_caches:
             generator_cls: Type[BaseGenerator] = import_string(generator_path)
-            generator = self._generator_caches[generator_path] = generator_cls()
+            self.generator_caches[generator_path] = generator_cls(self.mkdocs)
 
+        generator = self.generator_caches[generator_path]
         options = generator.validate_options(options)
         return generator, options
 
-    def match(self, filepath: Path, config: ResolverConfig, options: dict) -> bool:
-        return fnmatch(str(filepath), config["glob"])
+    def match(self, filepath: Path, rule: ResolverRule, options: dict) -> bool:
+        return filepath.match(rule.glob)
 
 
 def import_string(path):

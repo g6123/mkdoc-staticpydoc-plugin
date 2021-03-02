@@ -1,5 +1,7 @@
+import os
 import re
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Dict, Generator, Optional, OrderedDict, Type, cast
 
 from docstring_parser import parse as parse_docstring
@@ -23,7 +25,8 @@ __all__ = ["ParsoGenerator"]
 
 @dataclass
 class ParsoGeneratorContext:
-    filepath: str
+    basepath: Path
+    filepath: Path
     symbol: Optional[str]
     parent: Optional[Scope]
     depth: int
@@ -72,8 +75,9 @@ class ParsoGenerator(BaseGenerator):
             root_node = module
 
         context = ParsoGeneratorContext(
-            filepath,
-            symbol,
+            basepath=Path(self.mkdocs["config_file_path"]).parent,
+            filepath=filepath,
+            symbol=symbol,
             parent=None,
             depth=options["depth"],
             deep=options["deep"],
@@ -90,7 +94,17 @@ class ParsoGenerator(BaseGenerator):
             yield from self._generate_func_doc(cast(Function, node), context)
 
     def _generate_module_doc(self, module_node: Module, context: ParsoGeneratorContext):
-        yield markdown_heading(f"`{context.filepath}`", level=context.depth)
+        module_path = context.filepath.relative_to(context.basepath).parts
+        if module_path[-1] == "__init__.py":
+            module_path = module_path[:-1]
+        else:
+            module_name, _ = os.path.splitext(module_path[-1])
+            module_path = module_path[:-1] + (module_name,)
+
+        yield markdown_heading(
+            "`{title}`".format(title=".".join(module_path)),
+            level=context.depth,
+        )
 
         doc_node = cast(Optional[String], module_node.get_doc_node())
         if doc_node:
@@ -120,19 +134,22 @@ class ParsoGenerator(BaseGenerator):
                 )
 
     def _generate_func_doc(self, func_node: Function, context: ParsoGeneratorContext):
-        if not context.options["methods"]["undocumented"]:
-            if func_node.get_doc_node() is None:
-                return
-
-        if not context.options["methods"]["private"]:
-            if re.match(r"^_[^_]+?$", func_node.name.value):
-                return
-
         if isnode(context.parent, Class):
+            is_undocumented = func_node.get_doc_node() is None
+            is_private = re.match(r"^_[^_]+?$", func_node.name.value)
             is_static = any(
                 re.search("(staticmethod|classmethod)", decorator_node.get_code())
                 for decorator_node in func_node.get_decorators()
             )
+
+            if not context.options["methods"]["undocumented"]:
+                if is_undocumented:
+                    return
+
+            if not context.options["methods"]["private"]:
+                if is_private:
+                    return
+
             prefix = context.parent_name + ("." if is_static else "#")
         else:
             prefix = ""

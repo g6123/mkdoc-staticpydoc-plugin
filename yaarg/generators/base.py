@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Optional, cast
 
+from mkdocs.config import Config as MKDocsConfig
 from schema import Schema
 
 
@@ -15,6 +16,9 @@ class BaseGenerator(ABC):
     """
 
     options_schema = Schema({})
+
+    def __init__(self, mkdocs: MKDocsConfig):
+        self.mkdocs = mkdocs
 
     def validate_options(self, options: dict) -> dict:
         """
